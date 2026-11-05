@@ -107,6 +107,18 @@ async def run(args):
             ("HIGH-burst", args.high_rps, 256, 64, args.phase_seconds),
             ("low-after", args.low_rps, 256, 64, args.phase_seconds),
         ]
+    elif args.mode == "sweep":
+        # Five prefill lengths exercise the synthetic profile's clock ladder.
+        phases = [("idle-before", 0, 0, 0, args.idle_seconds)]
+        for tokens in (64, 256, 512, 1024, 2048):
+            phases.extend([
+                (f"PREFILL-{tokens}", args.prefill_rps, tokens, 8, args.phase_seconds),
+                (f"drain-{tokens}", 0, 0, 0, args.idle_seconds),
+            ])
+        phases.extend([
+            ("DECODE-heavy", args.decode_rps, 64, 256, args.phase_seconds),
+            ("drain-decode", 0, 0, 0, args.idle_seconds),
+        ])
     else:
         phases = [
             ("idle-before", 0, 0, 0, args.idle_seconds),
@@ -279,7 +291,7 @@ def main():
     p.add_argument("--url", default="http://127.0.0.1:8000")
     p.add_argument("--model", help="Default: first ID returned by GET /v1/models")
     p.add_argument("--device", type=int, default=0, help="Host NPU ID for npu-smi")
-    p.add_argument("--mode", choices=("burst", "phases"), default="burst")
+    p.add_argument("--mode", choices=("burst", "phases", "sweep"), default="burst")
     p.add_argument("--phase-seconds", type=float, default=20.0)
     p.add_argument("--idle-seconds", type=float, default=8.0)
     p.add_argument("--low-rps", type=float, default=0.5)
