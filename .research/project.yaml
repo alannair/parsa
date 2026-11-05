@@ -1,0 +1,11 @@
+project:
+  name: PARSA
+  description: Energy-aware LLM serving on Ascend NPUs.
+  repository: /home/siavash/Projects/parsa/code
+
+config:
+  model_dir: /data1/models
+  dataset_dir: /data1/datasets
+  default_model: qwen3-4b
+  default_vllm_version: "0.11"
+  vllm_023_image: vllm-ascend-parsa:0.23.0

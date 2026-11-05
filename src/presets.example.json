@@ -1,0 +1,34 @@
+[
+  {
+    "preset_id": "lane_p",
+    "backend_url": "http://127.0.0.1:8100",
+    "max_num_batched_tokens": 2048,
+    "max_num_seqs": 128,
+    "frequency_mhz": 1800,
+    "lane_type": "prefill"
+  },
+  {
+    "preset_id": "lane_balanced",
+    "backend_url": "http://127.0.0.1:8150",
+    "max_num_batched_tokens": 4096,
+    "max_num_seqs": 192,
+    "frequency_mhz": 1650,
+    "lane_type": "generic"
+  },
+  {
+    "preset_id": "lane_d",
+    "backend_url": "http://127.0.0.1:8200",
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 256,
+    "frequency_mhz": 1500,
+    "lane_type": "decode"
+  },
+  {
+    "preset_id": "rescue",
+    "backend_url": "http://127.0.0.1:8300",
+    "max_num_batched_tokens": 16384,
+    "max_num_seqs": 320,
+    "frequency_mhz": 1400,
+    "lane_type": "rescue"
+  }
+]

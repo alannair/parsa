@@ -1,0 +1,35 @@
+[
+  {
+    "name": "n-lane-latency",
+    "model": "/mnt/nvme1/models/qwen3-4b",
+    "tp": 2,
+    "lanes": [
+      {
+        "preset_id": "lane_p",
+        "backend_url": "http://127.0.0.1:8100",
+        "max_num_batched_tokens": 8192,
+        "max_num_seqs": 128,
+        "frequency_mhz": 1650,
+        "lane_type": "prefill"
+      },
+      {
+        "preset_id": "lane_d",
+        "backend_url": "http://127.0.0.1:8200",
+        "max_num_batched_tokens": 8192,
+        "max_num_seqs": 256,
+        "frequency_mhz": 1100,
+        "lane_type": "decode"
+      }
+    ],
+    "total_num_reqs": 5,
+    "routing_policy": "best_feasible_latency",
+    "routing_kwargs": {
+      "soft_admission": { "enabled": true },
+      "power_policy": {
+        "enabled": true,
+        "budget_w": 900.0,
+        "reserve_w": 25.0
+      }
+    }
+  }
+]

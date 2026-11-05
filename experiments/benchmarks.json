@@ -1,0 +1,64 @@
+{
+  "format": "parsa-benchmark-sweep-v1",
+  "model": "/mnt/nvme1/models/qwen3-4b",
+  "tp": 2,
+  "client_defaults": {
+    "prompt_source": "azure-mix",
+    "azure_mix_schedule_csv": "/datasets/azure-mix/scheduled_prompts.csv",
+    "stream_metrics": true,
+    "max_in_flight": 100
+  },
+  "routing": {
+    "routing_policy": "random",
+    "routing_kwargs": {
+      "feedback": { "enabled": false }
+    }
+  },
+  "lanes": [
+    {
+      "role": "decode-heavy",
+      "preset_id": "lane_d",
+      "lane_type": "decode",
+      "backend_url": "http://127.0.0.1:8200",
+      "workloads": [
+        {
+          "suffix": "conv",
+          "active_pools": "conversation",
+          "max_tokens": 8192,
+          "total_num_reqs": 100,
+          "notes": "Conversation prompts: input usually <500 tokens, output centered around ~2000 with tail beyond 8000."
+        },
+        {
+          "suffix": "code",
+          "active_pools": "code",
+          "max_tokens": 8192,
+          "total_num_reqs": 100,
+          "notes": "Code completion prompts: short input, long decode-heavy outputs similar to chat/code workloads."
+        }
+      ],
+      "sweep": {
+        "max_num_seqs": [50, 100, 200],
+        "frequency_mhz": [900, 1100, 1300, 1500, 1650]
+      }
+    },
+    {
+      "role": "prefill-heavy",
+      "preset_id": "lane_p",
+      "lane_type": "prefill",
+      "backend_url": "http://127.0.0.1:8100",
+      "workloads": [
+        {
+          "suffix": "sum",
+          "active_pools": "summarization",
+          "max_tokens": 1024,
+          "total_num_reqs": 50,
+          "notes": "ArXiv summarization prompts: input typically 3000-4000 tokens and sometimes >15000; output usually <1000."
+        }
+      ],
+      "sweep": {
+        "max_num_seqs": [5, 10, 50],
+        "frequency_mhz": [900, 1100, 1300, 1500, 1650]
+      }
+    }
+  ]
+}

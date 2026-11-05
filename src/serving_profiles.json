@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "profile_id": "qwen3-4b-vllm-0.11.0",
+      "revision": 2,
+      "model": "Qwen/Qwen3-4B",
+      "versions": {"vllm": "0.11.0", "vllm_ascend": "0.11.0"},
+      "documentation_version": "0.11.0",
+      "validated_version": null,
+      "source_provenance": {
+        "section": "online-serving/single-npu",
+        "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.11.0/tutorials/single_npu.html"
+      },
+      "status": "ready",
+      "defaults": {"args": {}, "env": {"PYTORCH_NPU_ALLOC_CONF": "max_split_size_mb:256"}},
+      "rationale": "Documentation-derived allocator default, adapted from the pinned 0.11 SingleNPU Qwen3-8B example to the Qwen3-4B family member and all experiment contexts. This family generalization is a documented adaptation, not a proven optimal recipe.",
+      "source_evidence": [
+        {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm-ascend/2f1aed98ccdb0fcbe1ff4fd0abab225bfd8d0367/docs/source/tutorials/single_npu.md",
+          "commit": "2f1aed98ccdb0fcbe1ff4fd0abab225bfd8d0367",
+          "section": "online-serving/single-npu",
+          "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.11.0/tutorials/single_npu.html",
+          "documentation_version": "0.11.0",
+          "validated_version": null,
+          "context": "The source demonstrates max_split_size_mb:256 for SingleNPU Qwen3-8B. Applying that allocator default to Qwen3-4B and other experiment contexts is a documented family adaptation; optimality is not established. Validation version is unknown."
+        }
+      ],
+      "guidance": []
+    },
+    {
+      "profile_id": "qwen3-8b-vllm-0.11.0",
+      "revision": 2,
+      "model": "Qwen/Qwen3-8B",
+      "versions": {"vllm": "0.11.0", "vllm_ascend": "0.11.0"},
+      "documentation_version": "0.11.0",
+      "validated_version": null,
+      "source_provenance": {
+        "section": "online-serving/single-npu",
+        "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.11.0/tutorials/single_npu.html"
+      },
+      "status": "ready",
+      "defaults": {"args": {}, "env": {"PYTORCH_NPU_ALLOC_CONF": "max_split_size_mb:256"}},
+      "rationale": "Documentation-derived allocator default from the pinned 0.11 SingleNPU Qwen3-8B example, applied to every experiment context. Broader-context use is a documented adaptation, not a proven optimal recipe.",
+      "source_evidence": [
+        {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm-ascend/2f1aed98ccdb0fcbe1ff4fd0abab225bfd8d0367/docs/source/tutorials/single_npu.md",
+          "commit": "2f1aed98ccdb0fcbe1ff4fd0abab225bfd8d0367",
+          "section": "online-serving/single-npu",
+          "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.11.0/tutorials/single_npu.html",
+          "documentation_version": "0.11.0",
+          "validated_version": null,
+          "context": "The source demonstrates max_split_size_mb:256 for SingleNPU Qwen3-8B. Broader experiment-context use is a documented adaptation; optimality is not established. Validation version is unknown."
+        }
+      ],
+      "guidance": []
+    },
+    {
+      "profile_id": "qwen3-14b-vllm-0.11.0",
+      "revision": 2,
+      "model": "Qwen/Qwen3-14B",
+      "versions": {"vllm": "0.11.0", "vllm_ascend": "0.11.0"},
+      "documentation_version": "0.11.0",
+      "validated_version": null,
+      "source_provenance": {
+        "section": "online-serving/single-npu",
+        "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.11.0/tutorials/single_npu.html"
+      },
+      "status": "ready",
+      "defaults": {"args": {}, "env": {"PYTORCH_NPU_ALLOC_CONF": "max_split_size_mb:256"}},
+      "rationale": "Documentation-derived allocator default, adapted from the pinned 0.11 SingleNPU Qwen3-8B example to the Qwen3-14B family member and all experiment contexts. This family generalization is a documented adaptation, not a proven optimal recipe.",
+      "source_evidence": [
+        {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm-ascend/2f1aed98ccdb0fcbe1ff4fd0abab225bfd8d0367/docs/source/tutorials/single_npu.md",
+          "commit": "2f1aed98ccdb0fcbe1ff4fd0abab225bfd8d0367",
+          "section": "online-serving/single-npu",
+          "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.11.0/tutorials/single_npu.html",
+          "documentation_version": "0.11.0",
+          "validated_version": null,
+          "context": "The source demonstrates max_split_size_mb:256 for SingleNPU Qwen3-8B. Applying that allocator default to Qwen3-14B and other experiment contexts is a documented family adaptation; optimality is not established. Validation version is unknown."
+        }
+      ],
+      "guidance": []
+    },
+    {
+      "profile_id": "qwen3-4b-vllm-0.23.0",
+      "revision": 2,
+      "model": "Qwen/Qwen3-4B",
+      "versions": {"vllm": "0.23.0", "vllm_ascend": "0.23.0"},
+      "documentation_version": "0.23.0",
+      "validated_version": "0.21.0",
+      "source_provenance": {
+        "section": "models/Qwen3-Dense",
+        "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.23.0/tutorials/models/Qwen3-Dense.html"
+      },
+      "status": "ready",
+      "defaults": {"args": {"gpu-memory-utilization": 0.9}, "env": {"PYTORCH_NPU_ALLOC_CONF": "expandable_segments:True"}},
+      "rationale": "Documentation-derived allocator and memory-utilization defaults, adapted beyond the pinned 0.23 quantized Qwen3 example to Qwen3-4B and every experiment context. This is a documented adaptation, not a proven optimal recipe. The tutorial reports validation on 0.21.0 and is reference only.",
+      "source_evidence": [
+        {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm-ascend/5cb98caaadeff42b5b62b996e34bb2aaa29d20fd/docs/source/tutorials/models/Qwen3-Dense.md",
+          "commit": "5cb98caaadeff42b5b62b996e34bb2aaa29d20fd",
+          "section": "models/Qwen3-Dense",
+          "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.23.0/tutorials/models/Qwen3-Dense.html",
+          "documentation_version": "0.23.0",
+          "validated_version": "0.21.0",
+          "context": "The 0.23 documentation contains quantized-example allocator and gpu-memory-utilization settings. Applying expandable_segments:True and 0.9 beyond that example to this model and all experiment contexts is a documented adaptation, not evidence of optimality. The tutorial reports validation on 0.21.0 and is reference only."
+        }
+      ],
+      "guidance": []
+    },
+    {
+      "profile_id": "qwen3-8b-vllm-0.23.0",
+      "revision": 2,
+      "model": "Qwen/Qwen3-8B",
+      "versions": {"vllm": "0.23.0", "vllm_ascend": "0.23.0"},
+      "documentation_version": "0.23.0",
+      "validated_version": "0.21.0",
+      "source_provenance": {
+        "section": "models/Qwen3-Dense",
+        "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.23.0/tutorials/models/Qwen3-Dense.html"
+      },
+      "status": "ready",
+      "defaults": {"args": {"gpu-memory-utilization": 0.9}, "env": {"PYTORCH_NPU_ALLOC_CONF": "expandable_segments:True"}},
+      "rationale": "Documentation-derived allocator and memory-utilization defaults, adapted beyond the pinned 0.23 quantized Qwen3 example to Qwen3-8B and every experiment context. This is a documented adaptation, not a proven optimal recipe. The tutorial reports validation on 0.21.0 and is reference only.",
+      "source_evidence": [
+        {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm-ascend/5cb98caaadeff42b5b62b996e34bb2aaa29d20fd/docs/source/tutorials/models/Qwen3-Dense.md",
+          "commit": "5cb98caaadeff42b5b62b996e34bb2aaa29d20fd",
+          "section": "models/Qwen3-Dense",
+          "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.23.0/tutorials/models/Qwen3-Dense.html",
+          "documentation_version": "0.23.0",
+          "validated_version": "0.21.0",
+          "context": "The 0.23 documentation contains quantized-example allocator and gpu-memory-utilization settings. Applying expandable_segments:True and 0.9 beyond that example to this model and all experiment contexts is a documented adaptation, not evidence of optimality. The tutorial reports validation on 0.21.0 and is reference only."
+        }
+      ],
+      "guidance": []
+    },
+    {
+      "profile_id": "qwen3-14b-vllm-0.23.0",
+      "revision": 2,
+      "model": "Qwen/Qwen3-14B",
+      "versions": {"vllm": "0.23.0", "vllm_ascend": "0.23.0"},
+      "documentation_version": "0.23.0",
+      "validated_version": "0.21.0",
+      "source_provenance": {
+        "section": "models/Qwen3-Dense",
+        "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.23.0/tutorials/models/Qwen3-Dense.html"
+      },
+      "status": "ready",
+      "defaults": {"args": {"gpu-memory-utilization": 0.9}, "env": {"PYTORCH_NPU_ALLOC_CONF": "expandable_segments:True"}},
+      "rationale": "Documentation-derived allocator and memory-utilization defaults, adapted beyond the pinned 0.23 quantized Qwen3 example to Qwen3-14B and every experiment context. This is a documented adaptation, not a proven optimal recipe. The tutorial reports validation on 0.21.0 and is reference only.",
+      "source_evidence": [
+        {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm-ascend/5cb98caaadeff42b5b62b996e34bb2aaa29d20fd/docs/source/tutorials/models/Qwen3-Dense.md",
+          "commit": "5cb98caaadeff42b5b62b996e34bb2aaa29d20fd",
+          "section": "models/Qwen3-Dense",
+          "official_url": "https://docs.vllm.ai/projects/ascend/en/v0.23.0/tutorials/models/Qwen3-Dense.html",
+          "documentation_version": "0.23.0",
+          "validated_version": "0.21.0",
+          "context": "The 0.23 documentation contains quantized-example allocator and gpu-memory-utilization settings. Applying expandable_segments:True and 0.9 beyond that example to this model and all experiment contexts is a documented adaptation, not evidence of optimality. The tutorial reports validation on 0.21.0 and is reference only."
+        }
+      ],
+      "guidance": []
+    }
+  ]
+}

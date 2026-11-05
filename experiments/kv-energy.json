@@ -1,0 +1,43 @@
+{
+  "format": "parsa-benchmark-sweep-v1",
+  "model": "/mnt/nvme1/models/qwen3-4b",
+  "tp": 2,
+  "client_defaults": {
+    "prompt_source": "azure-mix",
+    "azure_mix_schedule_csv": "/datasets/azure-mix/scheduled_prompts.csv",
+    "stream_metrics": true,
+    "max_in_flight": 100
+  },
+  "routing": {
+    "routing_policy": "random",
+    "routing_kwargs": {
+      "feedback": { "enabled": false },
+      "kv_project": { "enabled": false }
+    }
+  },
+  "lanes": [
+    {
+      "role": "kv-energy",
+      "preset_id": "lane_d",
+      "lane_type": "decode",
+      "backend_url": "http://127.0.0.1:8200",
+      "capabilities": {
+        "kv_projection": true
+      },
+      "workloads": [
+        {
+          "suffix": "conv",
+          "active_pools": "conversation",
+          "max_tokens": 4096,
+          "total_num_reqs": 100,
+          "notes": "Decode-heavy workload to grow KV cache with concurrency."
+        }
+      ],
+      "sweep": {
+        "max_num_batched_tokens": [8192],
+        "max_num_seqs": [10, 25, 50, 100, 200],
+        "frequency_mhz": [1300]
+      }
+    }
+  ]
+}

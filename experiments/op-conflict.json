@@ -1,0 +1,42 @@
+{
+  "_license": [
+    "Copyright (C) 2026 M.R. Siavash Katebzadeh <mr@katebzadeh.xyz>",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <https://www.gnu.org/licenses/>."
+  ],
+  "model": "/models/qwen3-8b",
+  "tp": 2,
+  "characterization_root": "experiments/_runs",
+  "characterization_glob": "**/result.json",
+  "characterization_repetitions": 5,
+  "maximum_frequency_mhz": 1650,
+  "fixed_max_num_batched_tokens": 16384,
+  "lanes": [
+    {"id": "lane_a", "url": "http://127.0.0.1:8100", "device_map": ["0", "1"]},
+    {"id": "lane_b", "url": "http://127.0.0.1:8200", "device_map": ["2", "3"]}
+  ],
+  "shapes": {
+    "prefill-heavy": {"prompt_tokens": 1000, "output_tokens": 1},
+    "decode-heavy": {"prompt_tokens": 1, "output_tokens": 1000}
+  },
+  "slo": {"ttft_p99_9_s": 10.0, "tpot_p99_9_s": 1.0},
+  "mixtures": [
+    {"name": "100-0", "prefill_pct": 100, "decode_pct": 0},
+    {"name": "50-50", "prefill_pct": 50, "decode_pct": 50},
+    {"name": "0-100", "prefill_pct": 0, "decode_pct": 100}
+  ],
+  "synthetic_token_id": 64,
+  "arrival_interval_s": 0.1,
+  "request_timeout_seconds": 25200,
+  "seed": 2026,
+  "total_requests": 200,
+  "repetitions": 5
+}

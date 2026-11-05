@@ -1,0 +1,34 @@
+{
+  "format": "parsa-benchmark-sweep-v1",
+  "model": "/models/qwen3-8b",
+  "tp": 2,
+  "repetitions": 3,
+  "client_defaults": {
+    "prompt_source": "synthetic",
+    "stream_metrics": true,
+    "max_in_flight": 200,
+    "request_timeout_seconds": 25200,
+    "ignore_eos": true
+  },
+  "routing": {
+    "routing_policy": "random",
+    "routing_kwargs": {"feedback": {"enabled": false}}
+  },
+  "lanes": [
+    {
+      "role": "request-shape",
+      "preset_id": "lane_d",
+      "lane_type": "generic",
+      "backend_url": "http://127.0.0.1:8200",
+      "workloads": [
+        {"suffix": "prefill-heavy", "total_num_reqs": 200, "max_prompts": 200, "synthetic_prompt_tokens": 1000, "max_tokens": 1, "min_tokens": 1, "metadata": {"request_shape": "prefill-heavy", "prompt_tokens": 1000, "output_tokens": 1}},
+        {"suffix": "decode-heavy", "total_num_reqs": 200, "max_prompts": 200, "synthetic_prompt_tokens": 1, "max_tokens": 1000, "min_tokens": 1000, "metadata": {"request_shape": "decode-heavy", "prompt_tokens": 1, "output_tokens": 1000}}
+      ],
+      "sweep": {
+        "max_num_batched_tokens": [16384],
+        "max_num_seqs": [128, 1],
+        "frequency_mhz": [900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800]
+      }
+    }
+  ]
+}

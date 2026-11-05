@@ -1,0 +1,31 @@
+{
+  "model": "/models/qwen3-8b",
+  "tp": 2,
+  "source_schedule": "/datasets/azure-mix/scheduled_prompts.csv",
+  "candidate_ops": [
+    {"frequency_mhz": 1100, "max_num_seqs": 50},
+    {"frequency_mhz": 1300, "max_num_seqs": 100},
+    {"frequency_mhz": 1650, "max_num_seqs": 200}
+  ],
+  "fixed_max_num_batched_tokens": 8192,
+  "lanes": [
+    {"id": "lane_a", "url": "http://127.0.0.1:8100", "device_map": ["0", "1"]},
+    {"id": "lane_b", "url": "http://127.0.0.1:8200", "device_map": ["2", "3"]}
+  ],
+  "routing": {
+    "routing_policy": "oracle_class_affinity",
+    "routing_kwargs": {"feedback": {"enabled": false}}
+  },
+  "slo": {
+    "ttft_p99_9_s": 10.0,
+    "tpot_p99_9_s": 1.0
+  },
+  "mixtures": [
+    {"name": "100-0", "summarization_pct": 100, "conversation_pct": 0},
+    {"name": "50-50", "summarization_pct": 50, "conversation_pct": 50},
+    {"name": "0-100", "summarization_pct": 0, "conversation_pct": 100}
+  ],
+  "seed": 2026,
+  "total_requests": 100,
+  "repetitions": 3
+}

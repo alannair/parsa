@@ -1,0 +1,71 @@
+# Copyright (C) 2026 M.R. Siavash Katebzadeh <mr@katebzadeh.xyz>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+ARG VLLM_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.11.0
+FROM ${VLLM_BASE_IMAGE}
+
+USER root
+WORKDIR /workspace
+
+ENV HTTP_PROXY="" HTTPS_PROXY="" ALL_PROXY="" FTP_PROXY="" NO_PROXY="*" \
+    http_proxy="" https_proxy="" all_proxy="" ftp_proxy="" no_proxy="*"
+
+RUN apt-get update -y && \
+  apt-get install -y --no-install-recommends \
+  build-essential \
+  vim \
+  git \
+  curl \
+  wget \
+  jq \
+  ca-certificates \
+  python3-dev \
+  python3-pip && \
+  rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --upgrade pip uv
+
+RUN pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+RUN uv pip install --system \
+  --index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
+  'fastapi>=0.110' 'aiohttp>=3.9' 'uvicorn>=0.29' \
+  'numpy>=1.24' 'pandas>=2.0' 'scipy>=1.10' 'scikit-learn>=1.3' \
+  'matplotlib>=3.7' 'seaborn>=0.13' \
+  'tensorflow>=2.15' 'torch>=2.0' 'transformers>=4.36' \
+  'sentencepiece>=0.1.99' 'protobuf>=3.20' 'datasets>=2.16' huggingface_hub \
+  'accelerate>=0.26' 'evaluate>=0.4' 'tqdm>=4.65' \
+  'tensorboard>=2.15' 'torchmetrics>=1.3'
+
+RUN git config --global --add safe.directory /vllm-workspace/vllm
+
+ARG VLLM_DIR
+ARG VLLM_ASCEND_DIR
+ARG VLLM_VERSION=0.11.0
+
+COPY ${VLLM_DIR} /vllm-workspace/vllm
+RUN SETUPTOOLS_SCM_PRETEND_VERSION=${VLLM_VERSION} VLLM_TARGET_DEVICE=empty pip install -e /vllm-workspace/vllm
+
+COPY ${VLLM_ASCEND_DIR} /vllm-workspace/vllm-ascend
+# Install vllm-ascend
+# Append `libascend_hal.so` path (devlib) to LD_LIBRARY_PATH
+RUN export PIP_EXTRA_INDEX_URL=https://mirrors.huaweicloud.com/ascend/repos/pypi && \
+  source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
+  source /usr/local/Ascend/nnal/atb/set_env.sh && \
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/Ascend/ascend-toolkit/latest/`uname -i`-linux/devlib && \
+  python3 -m pip install -v -e /vllm-workspace/vllm-ascend/ && \
+  python3 -m pip cache purge
+
+CMD ["/bin/bash"]

@@ -1,0 +1,840 @@
+From 645f0e70fabda6f2675b1ec246f096231275daa7 Mon Sep 17 00:00:00 2001
+From: "M.R. Siavash Katebzadeh" <mohammadreza.katebzadeh1@h-partners.com>
+Date: Wed, 17 Jun 2026 11:35:23 +0100
+Subject: [PATCH 1/2] WIP: add KV projection
+
+---
+ tests/parsa/test_kv_projection.py             | 139 ++++++++++++
+ vllm/config/__init__.py                       |   9 +
+ vllm/config/parsa.py                          |  24 +++
+ vllm/engine/arg_utils.py                      |  26 ++-
+ vllm/engine/protocol.py                       |   5 +
+ vllm/entrypoints/openai/api_server.py         |  19 +-
+ vllm/entrypoints/openai/serving_chat.py       |   1 +
+ vllm/entrypoints/openai/serving_completion.py |   1 +
+ vllm/entrypoints/openai/serving_engine.py     |  13 ++
+ vllm/parsa/__init__.py                        |  12 ++
+ vllm/parsa/kv_projection.py                   | 204 ++++++++++++++++++
+ vllm/parsa/metadata.py                        |  45 ++++
+ vllm/v1/engine/async_llm.py                   |   4 +
+ vllm/v1/engine/core.py                        |  25 +++
+ vllm/v1/engine/core_client.py                 |  17 ++
+ vllm/v1/request.py                            |   5 +
+ 16 files changed, 547 insertions(+), 2 deletions(-)
+ create mode 100644 tests/parsa/test_kv_projection.py
+ create mode 100644 vllm/config/parsa.py
+ create mode 100644 vllm/parsa/__init__.py
+ create mode 100644 vllm/parsa/kv_projection.py
+ create mode 100644 vllm/parsa/metadata.py
+
+diff --git a/tests/parsa/test_kv_projection.py b/tests/parsa/test_kv_projection.py
+new file mode 100644
+index 000000000..9eb06fbe0
+--- /dev/null
++++ b/tests/parsa/test_kv_projection.py
+@@ -0,0 +1,139 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++
++import unittest
++from types import SimpleNamespace
++
++from vllm.config import CacheConfig
++from vllm.config.parsa import ParsaConfig
++from vllm.parsa.kv_projection import (QUANTILES, SCHEMA_VERSION,
++                                      blocks_for_tokens,
++                                      build_kv_projection_snapshot)
++from vllm.parsa.metadata import extract_parsa_metadata, merge_parsa_metadata
++from vllm.sampling_params import SamplingParams
++
++
++class FakeRequest:
++
++    def __init__(
++        self,
++        request_id: str,
++        prompt_tokens: int,
++        output_tokens: int,
++        max_tokens: int,
++        parsa_metadata=None,
++    ):
++        self.request_id = request_id
++        self.num_prompt_tokens = prompt_tokens
++        self.num_output_tokens = output_tokens
++        self.max_tokens = max_tokens
++        self.sampling_params = SamplingParams(max_tokens=max_tokens)
++        self.parsa_metadata = parsa_metadata
++
++
++class FakeKVCacheManager:
++
++    def __init__(self, num_gpu_blocks: int, num_free_blocks: int,
++                 blocks_per_request: int):
++        self.block_pool = SimpleNamespace(
++            num_gpu_blocks=num_gpu_blocks,
++            get_num_free_blocks=lambda: num_free_blocks,
++        )
++        self._blocks_per_request = blocks_per_request
++
++    def get_block_ids(self, request_id: str):
++        return ([1] * self._blocks_per_request, )
++
++
++class ParsaKVProjectionTests(unittest.TestCase):
++
++    def test_extract_parsa_metadata(self):
++        metadata = extract_parsa_metadata({
++            "X-Energy-Aware-Request-Id": "req-1",
++            "X-Energy-Aware-L-In": "128",
++            "X-Energy-Aware-Predicted-Output-Tokens-P95": "64",
++        })
++        self.assertEqual(metadata["request_id"], "req-1")
++        self.assertEqual(metadata["l_in"], "128")
++        self.assertEqual(metadata["predicted_output_tokens_p95"], "64")
++
++    def test_merge_parsa_metadata(self):
++        params = SamplingParams(max_tokens=16)
++        merge_parsa_metadata(params, {"request_id": "req-2"})
++        self.assertEqual(params.extra_args["parsa_metadata"]["request_id"],
++                         "req-2")
++
++    def test_blocks_for_tokens(self):
++        self.assertEqual(blocks_for_tokens(0, 16), 0)
++        self.assertEqual(blocks_for_tokens(1, 16), 1)
++        self.assertEqual(blocks_for_tokens(16, 16), 1)
++        self.assertEqual(blocks_for_tokens(17, 16), 2)
++
++    def test_build_snapshot_matches_contract(self):
++        scheduler = SimpleNamespace(
++            running=[
++                FakeRequest(
++                    "r1",
++                    prompt_tokens=32,
++                    output_tokens=4,
++                    max_tokens=64,
++                    parsa_metadata={
++                        "predicted_output_tokens_p50": "32",
++                        "predicted_output_tokens_p90": "48",
++                        "predicted_output_tokens_p95": "64",
++                    },
++                ),
++            ],
++            block_size=16,
++        )
++        kv_cache_manager = FakeKVCacheManager(
++            num_gpu_blocks=101,
++            num_free_blocks=40,
++            blocks_per_request=3,
++        )
++        cache_config = CacheConfig()
++        cache_config.num_cpu_blocks = 0
++        parsa_config = ParsaConfig(enable_kv_projection=True,
++                                 engine_id="lane_hot",
++                                 horizon_iters=4)
++
++        snapshot = build_kv_projection_snapshot(
++            scheduler=scheduler,
++            kv_cache_manager=kv_cache_manager,
++            cache_config=cache_config,
++            parsa_config=parsa_config,
++        )
++
++        self.assertEqual(snapshot["schema_version"], SCHEMA_VERSION)
++        self.assertEqual(snapshot["engine_id"], "lane_hot")
++        self.assertEqual(snapshot["block_size_tokens"], 16)
++        self.assertEqual(snapshot["capacity"]["npu_blocks"], 100)
++        self.assertEqual(snapshot["current"]["npu_used_blocks"], 60)
++        self.assertEqual(snapshot["current"]["npu_free_blocks"], 40)
++        self.assertEqual(snapshot["current"]["active_requests"], 1)
++        self.assertEqual(snapshot["projection_basis"]["mode"],
++                         "router_hints_plus_runtime")
++        self.assertEqual(snapshot["projection_basis"]["horizon_iters"], 4)
++
++        for quantile in QUANTILES:
++            self.assertEqual(len(snapshot["projection"][quantile]), 4)
++            first = snapshot["projection"][quantile][0]
++            self.assertEqual(set(first.keys()),
++                             {"iter_offset", "batch_size", "npu_kv_blocks"})
++            self.assertGreaterEqual(
++                snapshot["summary"]["peak_npu_blocks"][quantile],
++                snapshot["current"]["npu_used_blocks"],
++            )
++
++        self.assertLessEqual(
++            snapshot["summary"]["peak_utilization"]["p50"],
++            snapshot["summary"]["peak_utilization"]["p90"],
++        )
++        self.assertLessEqual(
++            snapshot["summary"]["peak_utilization"]["p90"],
++            snapshot["summary"]["peak_utilization"]["p95"],
++        )
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/vllm/config/__init__.py b/vllm/config/__init__.py
+index 59b65900b..9b2338e72 100644
+--- a/vllm/config/__init__.py
++++ b/vllm/config/__init__.py
+@@ -29,6 +29,7 @@ from vllm.config.compilation import (CompilationConfig, CompilationLevel,
+                                      CUDAGraphMode, PassConfig)
+ from vllm.config.device import Device, DeviceConfig
+ from vllm.config.kv_events import KVEventsConfig
++from vllm.config.parsa import ParsaConfig
+ from vllm.config.kv_transfer import KVTransferConfig
+ from vllm.config.load import LoadConfig
+ from vllm.config.lora import LoRAConfig
+@@ -136,6 +137,8 @@ class VllmConfig:
+     """The configurations for distributed KV cache transfer."""
+     kv_events_config: Optional[KVEventsConfig] = None
+     """The configurations for event publishing."""
++    parsa_config: Optional[ParsaConfig] = None
++    """The configurations for PARSA router KV projection integration."""
+     # some opaque config, only used to provide additional information
+     # for the hash computation, mainly used for testing, debugging or out of
+     # tree config registration.
+@@ -457,6 +460,12 @@ class VllmConfig:
+                            "but the scheduler is configured to publish them."
+                            "Modify KVEventsConfig.enable_kv_cache_events"
+                            "to True to enable.")
++        if (self.parsa_config is not None
++                and self.parsa_config.enable_kv_projection
++                and not str(self.parsa_config.engine_id or "").strip()):
++            raise ValueError(
++                "parsa_config.engine_id must be set when "
++                "enable_kv_projection is True.")
+         current_platform.check_and_update_config(self)
+ 
+         # final check of cudagraph mode after platform-specific update
+diff --git a/vllm/config/parsa.py b/vllm/config/parsa.py
+new file mode 100644
+index 000000000..3e540af7a
+--- /dev/null
++++ b/vllm/config/parsa.py
+@@ -0,0 +1,24 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++
++from pydantic.dataclasses import dataclass
++
++from vllm.config.utils import config
++
++
++@config
++@dataclass
++class ParsaConfig:
++    """Configuration for PARSA router integration (KV projection telemetry)."""
++
++    enable_kv_projection: bool = False
++    """If True, expose GET /admin/parsa/kv-projection and parse PARSA headers."""
++
++    engine_id: str = ""
++    """Backend lane id; must match the PARSA preset id when KV projection is on."""
++
++    horizon_iters: int = 32
++    """Number of future decode iterations in projection vectors."""
++
++    iter_interval_ms: int = 50
++    """Assumed milliseconds per decode iteration for recovery-time estimates."""
+diff --git a/vllm/engine/arg_utils.py b/vllm/engine/arg_utils.py
+index 6bb794177..5bf1c565f 100644
+--- a/vllm/engine/arg_utils.py
++++ b/vllm/engine/arg_utils.py
+@@ -24,7 +24,7 @@ import vllm.envs as envs
+ from vllm.config import (BlockSize, CacheConfig, CacheDType, CompilationConfig,
+                          ConfigType, ConvertOption, DetailedTraceModules,
+                          Device, DeviceConfig, DistributedExecutorBackend,
+-                         EPLBConfig, HfOverrides, KVEventsConfig,
++                         EPLBConfig, HfOverrides, KVEventsConfig, ParsaConfig,
+                          KVTransferConfig, LoadConfig, LogprobsMode,
+                          LoRAConfig, MambaDType, MMEncoderTPMode, ModelConfig,
+                          ModelDType, ObservabilityConfig, ParallelConfig,
+@@ -455,6 +455,9 @@ class EngineArgs:
+ 
+     kv_transfer_config: Optional[KVTransferConfig] = None
+     kv_events_config: Optional[KVEventsConfig] = None
++    enable_parsa_kv_projection: bool = False
++    parsa_engine_id: str = ""
++    parsa_horizon_iters: int = ParsaConfig.horizon_iters
+ 
+     generation_config: str = ModelConfig.generation_config
+     enable_sleep_mode: bool = ModelConfig.enable_sleep_mode
+@@ -931,6 +934,22 @@ class EngineArgs:
+                                 **vllm_kwargs["kv_transfer_config"])
+         vllm_group.add_argument('--kv-events-config',
+                                 **vllm_kwargs["kv_events_config"])
++        parser.add_argument(
++            '--enable-parsa-kv-projection',
++            action='store_true',
++            help='Expose PARSA KV projection telemetry at '
++            '/admin/parsa/kv-projection.')
++        parser.add_argument(
++            '--parsa-engine-id',
++            type=str,
++            default="",
++            help='PARSA lane id for KV projection snapshots; must match the '
++            'preset id when --enable-parsa-kv-projection is set.')
++        parser.add_argument(
++            '--parsa-horizon-iters',
++            type=int,
++            default=ParsaConfig.horizon_iters,
++            help='Future decode iterations in PARSA KV projection vectors.')
+         vllm_group.add_argument("--compilation-config", "-O",
+                                 **vllm_kwargs["compilation_config"])
+         vllm_group.add_argument("--additional-config",
+@@ -1442,6 +1461,11 @@ class EngineArgs:
+             compilation_config=self.compilation_config,
+             kv_transfer_config=self.kv_transfer_config,
+             kv_events_config=self.kv_events_config,
++            parsa_config=ParsaConfig(
++                enable_kv_projection=self.enable_parsa_kv_projection,
++                engine_id=self.parsa_engine_id,
++                horizon_iters=self.parsa_horizon_iters,
++            ) if self.enable_parsa_kv_projection else None,
+             additional_config=self.additional_config,
+         )
+ 
+diff --git a/vllm/engine/protocol.py b/vllm/engine/protocol.py
+index 9aea74d0c..c263ddb96 100644
+--- a/vllm/engine/protocol.py
++++ b/vllm/engine/protocol.py
+@@ -331,3 +331,8 @@ class EngineClient(ABC):
+     async def get_supported_tasks(self) -> tuple[SupportedTask, ...]:
+         """Get supported tasks"""
+         raise NotImplementedError
++
++    async def get_parsa_kv_projection_snapshot(
++            self) -> Optional[dict[str, Any]]:
++        """Return the latest PARSA KV projection snapshot, if enabled."""
++        raise NotImplementedError
+diff --git a/vllm/entrypoints/openai/api_server.py b/vllm/entrypoints/openai/api_server.py
+index 15844d316..fdb712546 100644
+--- a/vllm/entrypoints/openai/api_server.py
++++ b/vllm/entrypoints/openai/api_server.py
+@@ -265,7 +265,7 @@ def mount_metrics(app: FastAPI):
+     # with header "Content-Type: text/plain; version=0.0.4; charset=utf-8"
+     # instead of the default "application/json" which is incorrect.
+     # See https://github.com/trallnag/prometheus-fastapi-instrumentator/issues/163#issue-1296092364
+-    Instrumentator(
++        Instrumentator(
+         excluded_handlers=[
+             "/metrics",
+             "/health",
+@@ -273,6 +273,7 @@ def mount_metrics(app: FastAPI):
+             "/ping",
+             "/version",
+             "/server_info",
++            "/admin/parsa/kv-projection",
+         ],
+         registry=registry,
+     ).add().instrument(app).expose(app, response_class=PrometheusResponse)
+@@ -372,6 +373,22 @@ async def get_server_load_metrics(request: Request):
+         content={'server_load': request.app.state.server_load_metrics})
+ 
+ 
++@router.get("/admin/parsa/kv-projection")
++async def get_parsa_kv_projection(raw_request: Request):
++    vllm_config: VllmConfig = raw_request.app.state.vllm_config
++    parsa_config = vllm_config.parsa_config
++    if parsa_config is None or not parsa_config.enable_kv_projection:
++        raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value,
++                            detail="PARSA KV projection is not enabled")
++    snapshot = await engine_client(raw_request).get_parsa_kv_projection_snapshot()
++    if snapshot is None:
++        raise HTTPException(
++            status_code=HTTPStatus.SERVICE_UNAVAILABLE.value,
++            detail="PARSA KV projection snapshot is unavailable",
++        )
++    return JSONResponse(content=snapshot)
++
++
+ @router.get("/ping", response_class=Response)
+ @router.post("/ping", response_class=Response)
+ async def ping(raw_request: Request) -> Response:
+diff --git a/vllm/entrypoints/openai/serving_chat.py b/vllm/entrypoints/openai/serving_chat.py
+index ab4bf7510..6121d86dd 100644
+--- a/vllm/entrypoints/openai/serving_chat.py
++++ b/vllm/entrypoints/openai/serving_chat.py
+@@ -292,6 +292,7 @@ class OpenAIServingChat(OpenAIServing):
+                     sampling_params = request.to_sampling_params(
+                         max_tokens, self.model_config.logits_processor_pattern,
+                         self.default_sampling_params)
++                    self._apply_parsa_metadata(sampling_params, raw_request)
+ 
+                 self._log_inputs(request_id,
+                                  request_prompts[i],
+diff --git a/vllm/entrypoints/openai/serving_completion.py b/vllm/entrypoints/openai/serving_completion.py
+index 0c61c48da..0d129c156 100644
+--- a/vllm/entrypoints/openai/serving_completion.py
++++ b/vllm/entrypoints/openai/serving_completion.py
+@@ -194,6 +194,7 @@ class OpenAIServingCompletion(OpenAIServing):
+                         self.model_config.logits_processor_pattern,
+                         self.default_sampling_params,
+                     )
++                    self._apply_parsa_metadata(sampling_params, raw_request)
+ 
+                 request_id_item = f"{request_id}-{i}"
+ 
+diff --git a/vllm/entrypoints/openai/serving_engine.py b/vllm/entrypoints/openai/serving_engine.py
+index 4eb1f8b89..304e519e5 100644
+--- a/vllm/entrypoints/openai/serving_engine.py
++++ b/vllm/entrypoints/openai/serving_engine.py
+@@ -73,6 +73,7 @@ from vllm.pooling_params import PoolingParams
+ from vllm.sampling_params import BeamSearchParams, SamplingParams
+ from vllm.tracing import (contains_trace_headers, extract_trace_headers,
+                           log_tracing_disabled_warning)
++from vllm.parsa.metadata import extract_parsa_metadata, merge_parsa_metadata
+ from vllm.transformers_utils.tokenizer import AnyTokenizer, MistralTokenizer
+ from vllm.utils import (AsyncMicrobatchTokenizer, is_list_of,
+                         merge_async_iterators, random_uuid)
+@@ -947,6 +948,18 @@ class OpenAIServing:
+ 
+         return None
+ 
++    @staticmethod
++    def _apply_parsa_metadata(
++        sampling_params: SamplingParams,
++        raw_request: Optional[Request],
++    ) -> None:
++        if raw_request is None:
++            return
++        merge_parsa_metadata(
++            sampling_params,
++            extract_parsa_metadata(raw_request.headers),
++        )
++
+     @staticmethod
+     def _base_request_id(raw_request: Optional[Request],
+                          default: Optional[str] = None) -> Optional[str]:
+diff --git a/vllm/parsa/__init__.py b/vllm/parsa/__init__.py
+new file mode 100644
+index 000000000..35c41bc3e
+--- /dev/null
++++ b/vllm/parsa/__init__.py
+@@ -0,0 +1,12 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++
++from vllm.parsa.kv_projection import SCHEMA_VERSION, build_kv_projection_snapshot
++from vllm.parsa.metadata import extract_parsa_metadata, merge_parsa_metadata
++
++__all__ = [
++    "SCHEMA_VERSION",
++    "build_kv_projection_snapshot",
++    "extract_parsa_metadata",
++    "merge_parsa_metadata",
++]
+diff --git a/vllm/parsa/kv_projection.py b/vllm/parsa/kv_projection.py
+new file mode 100644
+index 000000000..74ae467e9
+--- /dev/null
++++ b/vllm/parsa/kv_projection.py
+@@ -0,0 +1,204 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++
++import math
++import time
++from typing import TYPE_CHECKING, Any, Optional
++
++if TYPE_CHECKING:
++    from vllm.config import CacheConfig
++    from vllm.config.parsa import ParsaConfig
++    from vllm.v1.core.kv_cache_manager import KVCacheManager
++    from vllm.v1.core.sched.scheduler import Scheduler
++    from vllm.v1.request import Request
++
++SCHEMA_VERSION = "parsa.vllm.kv_projection.v1"
++QUANTILES = ("p50", "p90", "p95")
++RECOVERY_THRESHOLDS = ("0.80", "0.70", "0.60")
++
++
++def blocks_for_tokens(num_tokens: int, block_size: int) -> int:
++    if num_tokens <= 0 or block_size <= 0:
++        return 0
++    return int(math.ceil(float(num_tokens) / float(block_size)))
++
++
++def _predicted_output_tokens(request: "Request",
++                             quantile: str) -> float:
++    metadata = getattr(request, "parsa_metadata", None) or {}
++    key = "predicted_output_tokens_%s" % quantile
++    raw = metadata.get(key)
++    if raw is not None:
++        return max(0.0, float(raw))
++    if request.sampling_params is not None and request.sampling_params.max_tokens is not None:
++        return max(0.0, float(request.sampling_params.max_tokens))
++    return max(0.0, float(request.max_tokens or 0))
++
++
++def _prompt_tokens(request: "Request") -> int:
++    metadata = getattr(request, "parsa_metadata", None) or {}
++    raw = metadata.get("l_in")
++    if raw is not None:
++        return max(request.num_prompt_tokens, int(round(float(raw))))
++    return request.num_prompt_tokens
++
++
++def _current_blocks(request: "Request", kv_cache_manager: "KVCacheManager") -> int:
++    block_ids = kv_cache_manager.get_block_ids(request.request_id)
++    if not block_ids:
++        return 0
++    return len(block_ids[0])
++
++
++def _request_projection_rows(
++    running: list["Request"],
++    kv_cache_manager: "KVCacheManager",
++    block_size: int,
++    horizon_iters: int,
++) -> list[dict[str, Any]]:
++    rows: list[dict[str, Any]] = []
++    for request in running:
++        predicted = {
++            quantile: _predicted_output_tokens(request, quantile)
++            for quantile in QUANTILES
++        }
++        rows.append({
++            "prompt_tokens": _prompt_tokens(request),
++            "generated_tokens": request.num_output_tokens,
++            "current_blocks": _current_blocks(request, kv_cache_manager),
++            "predicted": predicted,
++        })
++    return rows
++
++
++def _projected_blocks(
++    prompt_tokens: int,
++    generated_tokens: int,
++    predicted_output: float,
++    iter_offset: int,
++    block_size: int,
++    current_blocks: int,
++) -> int:
++    projected_output = min(predicted_output,
++                           float(generated_tokens + iter_offset))
++    total_tokens = prompt_tokens + int(projected_output)
++    projected = blocks_for_tokens(total_tokens, block_size)
++    return max(current_blocks, projected)
++
++
++def _recovery_times_ms(
++    utilization_series: list[float],
++    iter_interval_ms: int,
++) -> dict[str, int]:
++    result: dict[str, int] = {}
++    for threshold in RECOVERY_THRESHOLDS:
++        target = float(threshold)
++        recovery = -1
++        for iter_offset, utilization in enumerate(utilization_series):
++            if utilization < target:
++                recovery = iter_offset * iter_interval_ms
++                break
++        result[threshold] = recovery
++    return result
++
++
++def build_kv_projection_snapshot(
++    scheduler: "Scheduler",
++    kv_cache_manager: "KVCacheManager",
++    cache_config: "CacheConfig",
++    parsa_config: "ParsaConfig",
++) -> dict[str, Any]:
++    block_pool = kv_cache_manager.block_pool
++    npu_blocks = max(0, block_pool.num_gpu_blocks - 1)
++    npu_free_blocks = block_pool.get_num_free_blocks()
++    npu_used_blocks = max(0, npu_blocks - npu_free_blocks)
++    block_size = scheduler.block_size
++    host_blocks = int(cache_config.num_cpu_blocks or 0)
++    host_used_blocks = 0
++
++    running = list(scheduler.running)
++    active_requests = len(running)
++    horizon_iters = max(1, int(parsa_config.horizon_iters or 32))
++    iter_interval_ms = max(1, int(parsa_config.iter_interval_ms or 50))
++    rows = _request_projection_rows(running, kv_cache_manager, block_size,
++                                    horizon_iters)
++
++    projection: dict[str, list[dict[str, int]]] = {
++        quantile: [] for quantile in QUANTILES
++    }
++    peak_blocks = {quantile: npu_used_blocks for quantile in QUANTILES}
++    peak_batch = {quantile: active_requests for quantile in QUANTILES}
++
++    for iter_offset in range(horizon_iters):
++        for quantile in QUANTILES:
++            batch_size = 0
++            total_blocks = 0
++            for row in rows:
++                predicted = float(row["predicted"][quantile])
++                generated = int(row["generated_tokens"])
++                if generated + iter_offset < predicted:
++                    batch_size += 1
++                total_blocks += _projected_blocks(
++                    prompt_tokens=int(row["prompt_tokens"]),
++                    generated_tokens=generated,
++                    predicted_output=predicted,
++                    iter_offset=iter_offset,
++                    block_size=block_size,
++                    current_blocks=int(row["current_blocks"]),
++                )
++            projection[quantile].append({
++                "iter_offset": iter_offset,
++                "batch_size": batch_size,
++                "npu_kv_blocks": total_blocks,
++            })
++            peak_blocks[quantile] = max(peak_blocks[quantile], total_blocks)
++            peak_batch[quantile] = max(peak_batch[quantile], batch_size)
++
++    capacity_den = float(npu_blocks) if npu_blocks > 0 else 1.0
++    peak_utilization = {
++        quantile: float(peak_blocks[quantile]) / capacity_den
++        for quantile in QUANTILES
++    }
++    current_utilization = float(npu_used_blocks) / capacity_den
++    utilization_series = [
++        max(current_utilization,
++            float(projection["p95"][iter_offset]["npu_kv_blocks"]) / capacity_den)
++        for iter_offset in range(horizon_iters)
++    ]
++
++    return {
++        "schema_version": SCHEMA_VERSION,
++        "ts_s": time.time(),
++        "engine_id": str(parsa_config.engine_id),
++        "block_size_tokens": int(block_size),
++        "capacity": {
++            "npu_blocks": int(npu_blocks),
++            "host_blocks": int(host_blocks),
++        },
++        "current": {
++            "npu_used_blocks": int(npu_used_blocks),
++            "npu_free_blocks": int(npu_free_blocks),
++            "host_used_blocks": int(host_used_blocks),
++            "active_requests": int(active_requests),
++        },
++        "projection_basis": {
++            "mode": "router_hints_plus_runtime",
++            "horizon_iters": int(horizon_iters),
++            "quantiles": [0.5, 0.9, 0.95],
++        },
++        "projection": projection,
++        "summary": {
++            "peak_npu_blocks": {
++                quantile: int(peak_blocks[quantile]) for quantile in QUANTILES
++            },
++            "peak_utilization": {
++                quantile: float(peak_utilization[quantile])
++                for quantile in QUANTILES
++            },
++            "peak_batch_size": {
++                quantile: int(peak_batch[quantile]) for quantile in QUANTILES
++            },
++            "time_to_below_utilization_ms": _recovery_times_ms(
++                utilization_series, iter_interval_ms),
++        },
++    }
+diff --git a/vllm/parsa/metadata.py b/vllm/parsa/metadata.py
+new file mode 100644
+index 000000000..ed56a09a7
+--- /dev/null
++++ b/vllm/parsa/metadata.py
+@@ -0,0 +1,45 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++
++from collections.abc import Mapping
++from typing import Any, Optional
++
++from vllm.sampling_params import SamplingParams
++
++_HEADER_MAP = {
++    "x-energy-aware-request-id": "request_id",
++    "x-energy-aware-l-in": "l_in",
++    "x-energy-aware-l-out-predicted-raw": "l_out_predicted_raw",
++    "x-energy-aware-l-out-effective": "l_out_effective",
++    "x-energy-aware-max-latency-s": "max_latency_s",
++    "x-energy-aware-target-ttft-s": "target_ttft_s",
++    "x-energy-aware-target-tpot-s": "target_tpot_s",
++    "x-energy-aware-predicted-output-tokens-p50": "predicted_output_tokens_p50",
++    "x-energy-aware-predicted-output-tokens-p90": "predicted_output_tokens_p90",
++    "x-energy-aware-predicted-output-tokens-p95": "predicted_output_tokens_p95",
++}
++
++
++def extract_parsa_metadata(
++    headers: Optional[Mapping[str, str]],
++) -> Optional[dict[str, Any]]:
++    if not headers:
++        return None
++    metadata: dict[str, Any] = {}
++    for key, value in headers.items():
++        field = _HEADER_MAP.get(key.lower())
++        if field is None:
++            continue
++        metadata[field] = value
++    return metadata or None
++
++
++def merge_parsa_metadata(
++    sampling_params: SamplingParams,
++    metadata: Optional[dict[str, Any]],
++) -> None:
++    if not metadata:
++        return
++    if sampling_params.extra_args is None:
++        sampling_params.extra_args = {}
++    sampling_params.extra_args["parsa_metadata"] = dict(metadata)
+diff --git a/vllm/v1/engine/async_llm.py b/vllm/v1/engine/async_llm.py
+index 757baecea..8c574e3e1 100644
+--- a/vllm/v1/engine/async_llm.py
++++ b/vllm/v1/engine/async_llm.py
+@@ -669,6 +669,10 @@ class AsyncLLM(EngineClient):
+         return await self.engine_core.collective_rpc_async(
+             method, timeout, args, kwargs)
+ 
++    async def get_parsa_kv_projection_snapshot(
++            self) -> Optional[dict[str, Any]]:
++        return await self.engine_core.get_parsa_kv_projection_snapshot_async()
++
+     async def wait_for_requests_to_drain(self, drain_timeout: int = 300):
+         """Wait for all requests to be drained."""
+         start_time = time.time()
+diff --git a/vllm/v1/engine/core.py b/vllm/v1/engine/core.py
+index a43042a55..e84a523d1 100644
+--- a/vllm/v1/engine/core.py
++++ b/vllm/v1/engine/core.py
+@@ -138,6 +138,11 @@ class EngineCore:
+         self.mm_receiver_cache = engine_receiver_cache_from_config(
+             vllm_config, mm_registry)
+ 
++        self.parsa_config = vllm_config.parsa_config
++        self._parsa_kv_projection_snapshot: Optional[dict[str, Any]] = None
++        if self.parsa_config is not None and self.parsa_config.enable_kv_projection:
++            self.refresh_parsa_kv_projection_snapshot()
++
+         # Setup batch queue for pipeline parallelism.
+         # Batch queue for scheduled batches. This enables us to asynchronously
+         # schedule and execute batches, and is required by pipeline parallelism
+@@ -296,6 +301,26 @@ class EngineCore:
+             draft_token_ids = self.model_executor.take_draft_token_ids()
+             if draft_token_ids is not None:
+                 self.scheduler.update_draft_token_ids(draft_token_ids)
++        if self.parsa_config is not None and self.parsa_config.enable_kv_projection:
++            self.refresh_parsa_kv_projection_snapshot()
++
++    def refresh_parsa_kv_projection_snapshot(self) -> None:
++        from vllm.parsa.kv_projection import build_kv_projection_snapshot
++
++        assert self.parsa_config is not None
++        self._parsa_kv_projection_snapshot = build_kv_projection_snapshot(
++            scheduler=self.scheduler,
++            kv_cache_manager=self.scheduler.kv_cache_manager,
++            cache_config=self.vllm_config.cache_config,
++            parsa_config=self.parsa_config,
++        )
++
++    def get_parsa_kv_projection_snapshot(self) -> Optional[dict[str, Any]]:
++        if self.parsa_config is None or not self.parsa_config.enable_kv_projection:
++            return None
++        if self._parsa_kv_projection_snapshot is None:
++            self.refresh_parsa_kv_projection_snapshot()
++        return self._parsa_kv_projection_snapshot
+ 
+     def step_with_batch_queue(
+             self) -> tuple[Optional[dict[int, EngineCoreOutputs]], bool]:
+diff --git a/vllm/v1/engine/core_client.py b/vllm/v1/engine/core_client.py
+index a84b0e551..46d3215ee 100644
+--- a/vllm/v1/engine/core_client.py
++++ b/vllm/v1/engine/core_client.py
+@@ -308,6 +308,16 @@ class InprocClient(EngineCoreClient):
+                        kwargs: Optional[dict[str, Any]] = None) -> list[_R]:
+         return self.engine_core.collective_rpc(method, timeout, args, kwargs)
+ 
++    def call_utility(self, method: str, *args) -> Any:
++        return getattr(self.engine_core, method)(*args)
++
++    def get_parsa_kv_projection_snapshot(self) -> Optional[dict[str, Any]]:
++        return self.engine_core.get_parsa_kv_projection_snapshot()
++
++    async def get_parsa_kv_projection_snapshot_async(
++            self) -> Optional[dict[str, Any]]:
++        return self.get_parsa_kv_projection_snapshot()
++
+     def dp_engines_running(self) -> bool:
+         return False
+ 
+@@ -755,6 +765,9 @@ class SyncMPClient(MPClient):
+                            max_size: Optional[int] = None) -> None:
+         self.call_utility("save_sharded_state", path, pattern, max_size)
+ 
++    def get_parsa_kv_projection_snapshot(self) -> Optional[dict[str, Any]]:
++        return self.call_utility("get_parsa_kv_projection_snapshot")
++
+ 
+ class AsyncMPClient(MPClient):
+     """Asyncio-compatible client for multi-proc EngineCore."""
+@@ -949,6 +962,10 @@ class AsyncMPClient(MPClient):
+         await self.call_utility_async("save_sharded_state", path, pattern,
+                                       max_size)
+ 
++    async def get_parsa_kv_projection_snapshot_async(
++            self) -> Optional[dict[str, Any]]:
++        return await self.call_utility_async("get_parsa_kv_projection_snapshot")
++
+     async def collective_rpc_async(
+             self,
+             method: Union[str, Callable[..., _R]],
+diff --git a/vllm/v1/request.py b/vllm/v1/request.py
+index ff10fa00c..759e5096e 100644
+--- a/vllm/v1/request.py
++++ b/vllm/v1/request.py
+@@ -63,6 +63,7 @@ class Request:
+ 
+         # P/D: Connector-specific KV transfer parameters.
+         self.kv_transfer_params: Optional[dict[str, Any]] = None
++        self.parsa_metadata: Optional[dict[str, Any]] = None
+ 
+         if pooling_params is not None:
+             # Pooling models.
+@@ -78,6 +79,10 @@ class Request:
+             if sampling_params.extra_args is not None:
+                 self.kv_transfer_params = \
+                     sampling_params.extra_args.get("kv_transfer_params")
++                parsa_metadata = sampling_params.extra_args.get(
++                    "parsa_metadata")
++                if isinstance(parsa_metadata, dict):
++                    self.parsa_metadata = dict(parsa_metadata)
+         else:
+             raise ValueError(
+                 "sampling_params and pooling_params can't both be unset")
+-- 
+2.43.0
+
+
+From 1a5fec6da91b7c33a61d617ae265c55ffe8a4005 Mon Sep 17 00:00:00 2001
+From: Mohammadreza Katebzadeh 84434322
+ <mohammadreza.katebzadeh1@h-partners.com>
+Date: Fri, 3 Jul 2026 11:21:51 +0100
+Subject: [PATCH 2/2] Fixed endpoints
+
+---
+ vllm/entrypoints/openai/api_server.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/vllm/entrypoints/openai/api_server.py b/vllm/entrypoints/openai/api_server.py
+index fdb712546..211e15fb9 100644
+--- a/vllm/entrypoints/openai/api_server.py
++++ b/vllm/entrypoints/openai/api_server.py
+@@ -265,7 +265,7 @@ def mount_metrics(app: FastAPI):
+     # with header "Content-Type: text/plain; version=0.0.4; charset=utf-8"
+     # instead of the default "application/json" which is incorrect.
+     # See https://github.com/trallnag/prometheus-fastapi-instrumentator/issues/163#issue-1296092364
+-        Instrumentator(
++    Instrumentator(
+         excluded_handlers=[
+             "/metrics",
+             "/health",
+-- 
+2.43.0
+
