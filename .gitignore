@@ -8,3 +8,4 @@ src/.___pycache__
 .___pycache__
 predictors/.___init__.py
 predictors/common/._metrics.py
+datasets/*

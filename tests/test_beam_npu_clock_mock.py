@@ -101,6 +101,16 @@ class TestBeamNpuClockMock(unittest.TestCase):
             ctl.set_clock(1800)
         self.assertEqual(backend.calls, [])
 
+    def test_explicit_restore_writes_rated_clock_without_override(self):
+        backend = FakeDsmi(self.module)
+        backend.current = 1300
+        ctl = self.module.AscendClockController(0, backend=backend)
+        ctl.restore_rated_clock()
+        self.assertEqual(backend.calls, [1800])
+        self.assertEqual(backend.current, 1800)
+        ctl.close()
+        self.assertEqual(backend.calls, [1800])
+
     def test_successful_dsmi_status_does_not_mean_clock_changed(self):
         backend = FakeDsmi(self.module, ignore_writes=True)
         ctl = self.module.AscendClockController(0, backend=backend)

@@ -1,0 +1,43 @@
+{
+  "model": "Qwen3-8B",
+  "vllm_version": "0.23.0",
+  "tensor_parallel_size": 2,
+  "physical_npus": [
+    0,
+    1
+  ],
+  "request_shape": {
+    "prompt_tokens": 1,
+    "output_tokens": 1000,
+    "offered_requests_per_repetition": 200,
+    "max_in_flight": 200,
+    "repetitions": 3
+  },
+  "server": {
+    "max_num_seqs": 200,
+    "max_num_batched_tokens": 16384,
+    "max_model_len": 4096,
+    "enforce_eager": true,
+    "async_scheduling": false
+  },
+  "beam": {
+    "image": "vllm-ascend-beam:0.23.0",
+    "use_s1": true,
+    "use_s2": true,
+    "ttft_slo_s": 0.6,
+    "tbt_slo_s": 0.4,
+    "profile": "beam/profile_synthetic.csv",
+    "profile_calibrated_for_model_and_topology": false,
+    "profile_sha256": "99551fc358ab3fdba28a14d867b76f194cadad3ad7ad61532ef6f0708af04520"
+  },
+  "vanilla_vllm": {
+    "image": "quay.io/ascend/vllm-ascend:v0.23.0",
+    "fixed_clock_mhz": 1300
+  },
+  "sampling": {
+    "source": "read-only DSMI",
+    "interval_s": 0.5,
+    "power_units": "W",
+    "energy_method": "trapezoidal integration of whole-device power"
+  }
+}

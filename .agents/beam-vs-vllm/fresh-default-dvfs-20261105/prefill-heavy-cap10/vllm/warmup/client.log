@@ -1,0 +1,4 @@
+prompt_idx=1 ok=1 lane: rescue=0 ttft_s=8.915346 duration_s=8.915390
+prompt_idx=2 ok=1 lane: rescue=0 ttft_s=12.008199 duration_s=12.008235
+prompt_idx=3 ok=1 lane: rescue=0 ttft_s=12.007928 duration_s=12.007961
+lane_histogram= {"": 3}

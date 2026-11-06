@@ -1,0 +1,11 @@
+prompt_idx=1 ok=1 lane: rescue=0 ttft_s=8.872219 duration_s=8.872263
+prompt_idx=8 ok=1 lane: rescue=0 ttft_s=9.030489 duration_s=9.030525
+prompt_idx=7 ok=1 lane: rescue=0 ttft_s=9.032068 duration_s=9.032107
+prompt_idx=4 ok=1 lane: rescue=0 ttft_s=9.034091 duration_s=9.034123
+prompt_idx=9 ok=1 lane: rescue=0 ttft_s=9.031349 duration_s=9.031381
+prompt_idx=2 ok=1 lane: rescue=0 ttft_s=9.036074 duration_s=9.036107
+prompt_idx=6 ok=1 lane: rescue=0 ttft_s=9.033489 duration_s=9.033521
+prompt_idx=3 ok=1 lane: rescue=0 ttft_s=9.035474 duration_s=9.035505
+prompt_idx=10 ok=1 lane: rescue=0 ttft_s=9.031508 duration_s=9.031539
+prompt_idx=5 ok=1 lane: rescue=0 ttft_s=9.034653 duration_s=9.034685
+lane_histogram= {"": 10}
